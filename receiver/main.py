@@ -30,6 +30,7 @@ async def webhook(
     request: Request,
     x_hub_signature_256: str | None = Header(default=None),
     x_github_event: str | None = Header(default=None),
+    x_github_delivery: str | None = Header(default=None),
 ):
     payload = await request.body()
     if not verify_signature(payload, x_hub_signature_256):
@@ -37,9 +38,15 @@ async def webhook(
 
     message = {
         "event": x_github_event,
+        "delivery_id": x_github_delivery,
         "payload": json.loads(payload),
     }
-    publisher.publish(topic_path, json.dumps(message).encode("utf-8"))
+    future = publisher.publish(topic_path, json.dumps(message).encode("utf-8"))
+    try:
+        future.result(timeout=10)
+    except Exception:
+        raise HTTPException(status_code=500, detail="publish failed")
+
     return {"status": "accepted"}
 
 
