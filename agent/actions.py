@@ -1,9 +1,9 @@
-"""GitHub-Aktionen fuer FIX/ASK und Slack-Benachrichtigung fuer ESCALATE.
+"""GitHub actions for FIX/ASK and Slack notification for ESCALATE.
 
-Jede Funktion ist eine Route aus dem Konzept (docs/CONCEPT.md). Die
-Idempotenz-Pruefung sitzt hier, nicht beim Agenten: der Agent liefert nur
-Symbol + Doku-Stelle, die Fingerprint-Logik und das "aktualisieren statt
-duplizieren" laufen intern ueber state.py.
+Each function is one route from the concept (docs/CONCEPT.md). The
+idempotency check lives here, not in the agent: the agent only supplies
+symbol + doc location, the fingerprint logic and "update instead of
+duplicate" run internally through state.py.
 """
 
 import os
@@ -32,8 +32,8 @@ def open_fix_pr(
     body: str,
     files: dict[str, str],
 ) -> str:
-    """FIX-Route: korrigierte Doku direkt per PR. Bestehender PR fuer denselben
-    Drift wird aktualisiert statt dupliziert."""
+    """FIX route: corrected docs directly via PR. An existing PR for the same
+    drift is updated instead of duplicated."""
     fp = state.finding_fingerprint(symbol, doc_path, doc_section)
     existing = state.get_open_reference(fp)
     repo = _repo()
@@ -62,8 +62,8 @@ def open_fix_pr(
 
 
 def open_ask_issue(symbol: str, doc_path: str, doc_section: str, title: str, question: str) -> str:
-    """ASK-Route: eine konkrete Rueckfrage als Issue. Ein bestehendes Issue fuer
-    denselben Drift bekommt einen Kommentar statt eines Duplikats."""
+    """ASK route: a concrete question as an issue. An existing issue for the
+    same drift gets a comment instead of a duplicate."""
     fp = state.finding_fingerprint(symbol, doc_path, doc_section)
     existing = state.get_open_reference(fp)
     repo = _repo()
@@ -81,8 +81,8 @@ def open_ask_issue(symbol: str, doc_path: str, doc_section: str, title: str, que
 
 
 def escalate_to_slack(symbol: str, doc_path: str, doc_section: str, reasoning: str) -> str:
-    """ESCALATE-Route: informiert einen Menschen per Slack, aendert nichts am
-    Repo. Fuer denselben Drift wird nur einmal benachrichtigt."""
+    """ESCALATE route: notifies a human via Slack, changes nothing in the
+    repo. Notifies only once per drift."""
     fp = state.finding_fingerprint(symbol, doc_path, doc_section)
     existing = state.get_open_reference(fp)
     reference = f"{doc_path}#{doc_section}"
@@ -97,7 +97,7 @@ def escalate_to_slack(symbol: str, doc_path: str, doc_section: str, reasoning: s
                 "text": (
                     f":warning: *Driftwood ESCALATE*\n"
                     f"Symbol: `{symbol}`\n"
-                    f"Doku: `{reference}`\n"
+                    f"Docs: `{reference}`\n"
                     f"{reasoning}"
                 )
             },

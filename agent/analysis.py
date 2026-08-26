@@ -1,14 +1,14 @@
-"""Diff -> Symbole -> referenzierende Doku-Abschnitte.
+"""Diff -> symbols -> referencing doc sections.
 
-Rein lokal: kein Netzwerk, keine Cloud, kein Modell. Das ist der
-Kontext-Reduktionsschritt aus docs/CONCEPT.md ("Context selection
-decides the cost") -- nur die hier gefundenen Symbole und Doku-Abschnitte
-gehen spaeter an den Agenten, nicht das ganze Repo.
+Purely local: no network, no cloud, no model. This is the context
+reduction step from docs/CONCEPT.md ("Context selection decides the
+cost") -- only the symbols and doc sections found here later go to the
+agent, not the whole repo.
 
-Bekannte Grenze: extract_changed_symbols() sieht nur den Diff-Text, kein
-volles Repo. Liegt eine geaenderte Zeile weit von der Funktionssignatur
-entfernt -- ausserhalb des Diff-Kontexts -- wird das Symbol nicht
-erkannt. Das ist eine Grenze der Eingabe, keine Regex-Luecke.
+Known limit: extract_changed_symbols() only ever sees the diff text, not
+the full repo. If a changed line sits far from the function signature --
+outside the diff context -- the symbol won't be recognized. That's a
+limit of the input, not a regex gap.
 """
 
 import argparse
@@ -36,7 +36,7 @@ class DocSection:
     line: int
 
 
-# --- Diff-Walk -------------------------------------------------------------
+# --- Diff walk -------------------------------------------------------------
 
 _HUNK_RE = re.compile(r"^@@ -(\d+)(?:,\d+)? \+(\d+)(?:,\d+)? @@")
 
@@ -48,7 +48,7 @@ def _strip_prefix(path: str) -> str:
 
 
 def _iter_changed_lines(diff: str):
-    """Liefert (file_path, line_no, sign, content) fuer jede +/- Zeile."""
+    """Yields (file_path, line_no, sign, content) for every +/- line."""
     current_file = None
     old_line = new_line = 0
 
@@ -75,7 +75,7 @@ def _iter_changed_lines(diff: str):
             new_line += 1
 
 
-# --- Symbol-Muster -----------------------------------------------------------
+# --- Symbol patterns ---------------------------------------------------------
 
 _PY_DEF_RE = re.compile(r"^\s*(?:async\s+)?def\s+(\w+)\s*\(")
 _JS_FUNC_RE = re.compile(r"^\s*(?:export\s+)?(?:default\s+)?(?:async\s+)?function\s+(\w+)\s*\(")
@@ -104,8 +104,8 @@ def _is_env_file(file_path: str) -> bool:
 
 
 def _python_params(def_line: str) -> list[str]:
-    """Parst eine einzelne, vollstaendig sichtbare Python-def-Zeile per ast,
-    um Parameter auch bei verschachtelten Typannotationen korrekt zu trennen."""
+    """Parses a single, fully visible Python def line via ast, to split
+    parameters correctly even with nested type annotations."""
     stripped = def_line.strip()
     if not stripped.endswith(":"):
         stripped += ":"
@@ -214,8 +214,8 @@ def _match_config_keys(file_path: str, line_no: int, content: str, add) -> None:
 
 
 def extract_changed_symbols(diff: str) -> list[Symbol]:
-    """Zieht geaenderte Bezeichner aus einem Unified-Diff: Funktionsnamen,
-    Parameter, Config-Keys, CLI-Flags, Env-Variablen."""
+    """Pulls changed identifiers out of a unified diff: function names,
+    parameters, config keys, CLI flags, env vars."""
     seen: dict[tuple[str, str, str], Symbol] = {}
 
     def add(file_path: str, kind: str, name: str, line: int) -> None:
@@ -232,7 +232,7 @@ def extract_changed_symbols(diff: str) -> list[Symbol]:
     return list(seen.values())
 
 
-# --- Doku-Suche --------------------------------------------------------------
+# --- Doc search --------------------------------------------------------------
 
 _SKIP_DIRS = {".git", "node_modules", ".venv", "venv", "__pycache__"}
 _FENCE_RE = re.compile(r"^\s*```")
@@ -291,8 +291,8 @@ def _scan_markdown(text: str, doc_path: str, patterns: list[tuple[Symbol, re.Pat
 
 
 def find_referencing_docs(symbols: list[Symbol], repo_path: str) -> list[DocSection]:
-    """Durchsucht alle Markdown-Dateien im Repo nach den Symbolen und liefert
-    je Treffer den umgebenden Abschnitt (Ueberschrift + Absatz/Codeblock)."""
+    """Searches all Markdown files in the repo for the symbols and returns,
+    per match, the surrounding section (heading + paragraph/code block)."""
     if not symbols:
         return []
 
@@ -315,7 +315,7 @@ def find_referencing_docs(symbols: list[Symbol], repo_path: str) -> list[DocSect
 
 def _format_report(symbols: list[Symbol], sections: list[DocSection]) -> str:
     if not symbols:
-        return "Keine Symbole im Diff gefunden.\n"
+        return "No symbols found in the diff.\n"
 
     by_kind: dict[str, list[Symbol]] = {}
     for s in symbols:
@@ -326,13 +326,13 @@ def _format_report(symbols: list[Symbol], sections: list[DocSection]) -> str:
         key = (sec.symbol.file_path, sec.symbol.kind, sec.symbol.name)
         sections_by_symbol.setdefault(key, []).append(sec)
 
-    lines = [f"{len(symbols)} Symbol(e) gefunden:\n"]
+    lines = [f"{len(symbols)} symbol(s) found:\n"]
     for kind in sorted(by_kind):
         lines.append(f"[{kind}]")
         for s in by_kind[kind]:
             lines.append(f"  {s.name}  ({s.file_path}:{s.line})")
             for sec in sections_by_symbol.get((s.file_path, s.kind, s.name), []):
-                heading = sec.heading or "(ohne Ueberschrift)"
+                heading = sec.heading or "(no heading)"
                 lines.append(f'    -> {sec.doc_path}:{sec.line}  "{heading}"')
         lines.append("")
 
@@ -341,10 +341,10 @@ def _format_report(symbols: list[Symbol], sections: list[DocSection]) -> str:
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Driftwood: Diff -> Symbole -> referenzierende Doku-Abschnitte"
+        description="Driftwood: diff -> symbols -> referencing doc sections"
     )
-    parser.add_argument("--repo", required=True, help="Pfad zum Repository, das nach Doku durchsucht wird")
-    parser.add_argument("--diff", required=True, help="Pfad zu einer Datei mit Unified-Diff-Text")
+    parser.add_argument("--repo", required=True, help="Path to the repository to search for docs")
+    parser.add_argument("--diff", required=True, help="Path to a file with unified diff text")
     args = parser.parse_args()
 
     diff_text = Path(args.diff).read_text(encoding="utf-8", errors="ignore")

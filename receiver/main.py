@@ -1,4 +1,4 @@
-"""Cloud Run Service: nimmt GitHub-Webhooks entgegen und veröffentlicht sie auf Pub/Sub."""
+"""Cloud Run service: receives GitHub webhooks and publishes them to Pub/Sub."""
 
 import hashlib
 import hmac

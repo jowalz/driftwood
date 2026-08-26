@@ -1,13 +1,13 @@
-"""Kalibrierungs-Check fuer den Klassifikator aus agent.py.
+"""Calibration check for the classifier in agent.py.
 
-Sechs handgebaute Faelle, zwei pro Route, laufen live gegen Gemini 3.5
-Flash via Vertex AI (kein Cloud-Run-Deployment noetig, aber lokale
-gcloud-Anmeldedaten + GOOGLE_CLOUD_PROJECT/GOOGLE_CLOUD_LOCATION aus
-.env erforderlich). Die Faelle 1/3 und 2/4 sind bewusst strukturell
-aehnlich, um genau die FIX/ASK-Grenze zu pruefen, an der das Modell laut
-Aufgabenstellung zum Uebercorrigieren neigt.
+Six hand-built cases, two per route, run live against Gemini 3.5 Flash
+via Vertex AI (no Cloud Run deployment needed, but local gcloud
+credentials + GOOGLE_CLOUD_PROJECT/GOOGLE_CLOUD_LOCATION from .env are
+required). Cases 1/3 and 2/4 are deliberately structurally similar, to
+probe exactly the FIX/ASK boundary where the model tends to
+overcorrect per the task description.
 
-Aufruf: python -m agent.routing_examples
+Run: python -m agent.routing_examples
 """
 
 import sys
@@ -28,13 +28,13 @@ class Example:
 
 EXAMPLES = [
     Example(
-        name="FIX-1: code_length Default 6 -> 8, Doku nennt die Zahl woertlich",
+        name="FIX-1: code_length default 6 -> 8, docs state the number literally",
         expected_route="FIX",
         symbol=Symbol(name="code_length", kind="parameter", file_path="shorturl.py", line=14),
         doc_section=DocSection(
             doc_path="README.md",
             heading="shorten_url(long_url: str) -> str",
-            content="Erzeugt einen 6-stelligen Kurzcode fuer `long_url`. Links laufen nach 1 Stunde ab.",
+            content="Generates a 6-character short code for `long_url`. Links expire after 1 hour.",
             symbol=Symbol(name="code_length", kind="parameter", file_path="shorturl.py", line=14),
             line=9,
         ),
@@ -44,29 +44,29 @@ EXAMPLES = [
         ),
     ),
     Example(
-        name="FIX-2: CLI-Flag --verbose -> --debug, 1:1-Umbenennung",
+        name="FIX-2: CLI flag --verbose -> --debug, 1:1 rename",
         expected_route="FIX",
         symbol=Symbol(name="--debug", kind="cli_flag", file_path="cli.py", line=22),
         doc_section=DocSection(
             doc_path="README.md",
-            heading="Optionen",
-            content="Nutze `--verbose`, um ausfuehrliche Logs zu aktivieren.",
+            heading="Options",
+            content="Use `--verbose` to enable verbose logging.",
             symbol=Symbol(name="--debug", kind="cli_flag", file_path="cli.py", line=22),
             line=30,
         ),
         diff_hunk=(
-            '-    parser.add_argument("--verbose", help="aktiviert ausfuehrliche Logs")\n'
-            '+    parser.add_argument("--debug", help="aktiviert ausfuehrliche Logs")'
+            '-    parser.add_argument("--verbose", help="enables verbose logging")\n'
+            '+    parser.add_argument("--debug", help="enables verbose logging")'
         ),
     ),
     Example(
-        name="ASK-1: timeout gesplittet in connect_timeout/read_timeout",
+        name="ASK-1: timeout split into connect_timeout/read_timeout",
         expected_route="ASK",
         symbol=Symbol(name="connect_timeout", kind="parameter", file_path="client.py", line=5),
         doc_section=DocSection(
             doc_path="README.md",
             heading="fetch(url: str, timeout: int) -> Response",
-            content="Der `timeout`-Parameter (Sekunden) begrenzt die Wartezeit auf eine Antwort.",
+            content="The `timeout` parameter (seconds) limits how long to wait for a response.",
             symbol=Symbol(name="connect_timeout", kind="parameter", file_path="client.py", line=5),
             line=14,
         ),
@@ -76,13 +76,13 @@ EXAMPLES = [
         ),
     ),
     Example(
-        name="ASK-2: limit-Suche wird zu cursor-Pagination",
+        name="ASK-2: limit-based search becomes cursor pagination",
         expected_route="ASK",
         symbol=Symbol(name="cursor", kind="parameter", file_path="search.py", line=8),
         doc_section=DocSection(
             doc_path="README.md",
             heading="search(query: str, limit: int) -> list[Result]",
-            content="Gibt die ersten `limit` Treffer zurueck, sortiert nach Relevanz.",
+            content="Returns the first `limit` results, sorted by relevance.",
             symbol=Symbol(name="cursor", kind="parameter", file_path="search.py", line=8),
             line=40,
         ),
@@ -92,14 +92,14 @@ EXAMPLES = [
         ),
     ),
     Example(
-        name="ESCALATE-1: komplette RateLimiter-Klasse entfernt",
+        name="ESCALATE-1: entire RateLimiter class removed",
         expected_route="ESCALATE",
         symbol=Symbol(name="RateLimiter", kind="function", file_path="middleware.py", line=1),
         doc_section=DocSection(
             doc_path="README.md",
             heading="Rate Limiting",
-            content="Alle Endpunkte sind auf 100 Requests pro Minute begrenzt. "
-            "Ueberschreitungen liefern `429 Too Many Requests`.",
+            content="All endpoints are limited to 100 requests per minute. "
+            "Exceeding this returns `429 Too Many Requests`.",
             symbol=Symbol(name="RateLimiter", kind="function", file_path="middleware.py", line=1),
             line=55,
         ),
@@ -112,13 +112,13 @@ EXAMPLES = [
         ),
     ),
     Example(
-        name="ESCALATE-2: komplette API-Key-Middleware entfernt",
+        name="ESCALATE-2: entire API-key middleware removed",
         expected_route="ESCALATE",
         symbol=Symbol(name="require_api_key", kind="function", file_path="middleware.py", line=40),
         doc_section=DocSection(
             doc_path="README.md",
-            heading="Authentifizierung",
-            content="Alle Requests benoetigen einen gueltigen API-Key im Header `X-API-Key`.",
+            heading="Authentication",
+            content="All requests require a valid API key in the `X-API-Key` header.",
             symbol=Symbol(name="require_api_key", kind="function", file_path="middleware.py", line=40),
             line=70,
         ),
@@ -146,14 +146,14 @@ def main() -> int:
         failures += 0 if ok else 1
         mark = "OK  " if ok else "FAIL"
         print(f"[{mark}] {example.name}")
-        print(f"       erwartet={example.expected_route}  tatsaechlich={result.route}")
+        print(f"       expected={example.expected_route}  actual={result.route}")
         print(f"       reasoning: {result.reasoning}")
         if result.proposed_change:
             print(f"       proposed_change: {result.proposed_change}")
         print()
 
     total = len(EXAMPLES)
-    print(f"{total - failures}/{total} Faelle wie erwartet geroutet.")
+    print(f"{total - failures}/{total} cases routed as expected.")
     return 1 if failures else 0
 
 

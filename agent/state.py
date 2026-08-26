@@ -1,4 +1,4 @@
-"""Firestore: Drift-Fingerprints und Idempotenz."""
+"""Firestore: drift fingerprints and idempotency."""
 
 import hashlib
 from datetime import datetime, timezone
@@ -17,7 +17,7 @@ def content_hash(*parts: str) -> str:
     return hashlib.sha256("|".join(parts).encode("utf-8")).hexdigest()
 
 
-# --- Webhook-Delivery-Dedup: schuetzt vor doppelter Pub/Sub-Zustellung ---
+# --- Webhook delivery dedup: guards against duplicate Pub/Sub delivery ---
 
 
 def already_delivered(delivery_id: str) -> bool:
@@ -30,7 +30,7 @@ def mark_delivered(delivery_id: str) -> None:
     )
 
 
-# --- Drift-Finding-Fingerprint: Symbol + Doku-Stelle, nicht der generierte Text ---
+# --- Drift finding fingerprint: symbol + doc location, not the generated text ---
 
 
 def finding_fingerprint(symbol: str, doc_path: str, doc_section: str) -> str:
@@ -38,7 +38,7 @@ def finding_fingerprint(symbol: str, doc_path: str, doc_section: str) -> str:
 
 
 def get_open_reference(fp: str) -> dict | None:
-    """Liefert Route + Referenz fuer diesen Drift, falls dazu schon etwas offen ist."""
+    """Returns route + reference for this drift, if something is already open for it."""
     doc = _client().collection(FINDING_COLLECTION).document(fp).get()
     return doc.to_dict() if doc.exists else None
 
