@@ -23,3 +23,9 @@ GitHub Webhook → receiver (Cloud Run Service) → Pub/Sub → agent (Cloud Run
 1. `.env.example` nach `.env` kopieren und Werte eintragen.
 2. `pip install -r requirements.txt`
 3. Deployment über `deploy/deploy.sh`.
+4. GitHub-Webhook im Zielrepo auf die Receiver-URL (`/webhook`) einrichten
+   — dabei **nur das `push`-Event** abonnieren, nicht "Send me
+   everything". Der Receiver filtert selbst nicht nach Event-Typ (siehe
+   `docs/CONCEPT.md`, "Why the receiver does almost nothing"); die
+   Filterung gehört bewusst in die Webhook-Konfiguration, nicht in den
+   Code.

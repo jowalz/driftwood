@@ -1,15 +1,44 @@
 #!/usr/bin/env bash
-# Reproduzierbares Deployment für receiver (Cloud Run Service) und agent (Cloud Run Job).
+# Reproduzierbares Deployment fuer receiver (Cloud Run Service) und agent (Cloud Run Job).
 set -euo pipefail
 
 : "${GCP_PROJECT_ID:?GCP_PROJECT_ID muss gesetzt sein}"
 : "${GCP_REGION:=europe-west3}"
 : "${PUBSUB_TOPIC:=driftwood-events}"
+: "${GITHUB_REPO:?GITHUB_REPO muss gesetzt sein (owner/repo)}"
+: "${GITHUB_TOKEN:?GITHUB_TOKEN muss gesetzt sein}"
+: "${GITHUB_WEBHOOK_SECRET:?GITHUB_WEBHOOK_SECRET muss gesetzt sein}"
 
 gcloud config set project "$GCP_PROJECT_ID"
 
 # --- Pub/Sub Topic ---
 gcloud pubsub topics create "$PUBSUB_TOPIC" --quiet || true
+
+# --- Secrets (GitHub-Token, Webhook-Secret, optional Slack) landen in Secret
+#     Manager statt als Klartext-Env-Var auf dem Service/Job. ---
+put_secret() {
+  local name="$1" value="$2"
+  if gcloud secrets describe "$name" --quiet >/dev/null 2>&1; then
+    printf '%s' "$value" | gcloud secrets versions add "$name" --data-file=- --quiet
+  else
+    printf '%s' "$value" | gcloud secrets create "$name" --data-file=- --quiet
+  fi
+}
+
+put_secret driftwood-github-token "$GITHUB_TOKEN"
+put_secret driftwood-github-webhook-secret "$GITHUB_WEBHOOK_SECRET"
+if [ -n "${SLACK_WEBHOOK_URL:-}" ]; then
+  put_secret driftwood-slack-webhook-url "$SLACK_WEBHOOK_URL"
+fi
+
+RUNTIME_SA="$(gcloud projects describe "$GCP_PROJECT_ID" --format='value(projectNumber)')-compute@developer.gserviceaccount.com"
+for secret in driftwood-github-token driftwood-github-webhook-secret driftwood-slack-webhook-url; do
+  gcloud secrets describe "$secret" --quiet >/dev/null 2>&1 || continue
+  gcloud secrets add-iam-policy-binding "$secret" \
+    --member="serviceAccount:${RUNTIME_SA}" \
+    --role="roles/secretmanager.secretAccessor" \
+    --quiet >/dev/null
+done
 
 # --- Receiver: Cloud Run Service ---
 gcloud builds submit --tag "gcr.io/${GCP_PROJECT_ID}/driftwood-receiver" -f receiver/Dockerfile .
@@ -19,15 +48,22 @@ gcloud run deploy driftwood-receiver \
   --region "$GCP_REGION" \
   --platform managed \
   --set-env-vars "GCP_PROJECT_ID=${GCP_PROJECT_ID},PUBSUB_TOPIC=${PUBSUB_TOPIC}" \
+  --set-secrets "GITHUB_WEBHOOK_SECRET=driftwood-github-webhook-secret:latest" \
   --allow-unauthenticated
 
 # --- Agent: Cloud Run Job ---
 gcloud builds submit --tag "gcr.io/${GCP_PROJECT_ID}/driftwood-agent" -f agent/Dockerfile .
 
+AGENT_SECRETS="GITHUB_TOKEN=driftwood-github-token:latest"
+if gcloud secrets describe driftwood-slack-webhook-url --quiet >/dev/null 2>&1; then
+  AGENT_SECRETS="${AGENT_SECRETS},SLACK_WEBHOOK_URL=driftwood-slack-webhook-url:latest"
+fi
+
 gcloud run jobs deploy driftwood-agent \
   --image "gcr.io/${GCP_PROJECT_ID}/driftwood-agent" \
   --region "$GCP_REGION" \
-  --set-env-vars "GCP_PROJECT_ID=${GCP_PROJECT_ID}"
+  --set-env-vars "GCP_PROJECT_ID=${GCP_PROJECT_ID},GITHUB_REPO=${GITHUB_REPO},GOOGLE_GENAI_USE_VERTEXAI=TRUE,GOOGLE_CLOUD_PROJECT=${GCP_PROJECT_ID},GOOGLE_CLOUD_LOCATION=${GCP_REGION}" \
+  --set-secrets "$AGENT_SECRETS"
 
 # --- Pub/Sub Subscription, die den Job triggert ---
 gcloud eventarc triggers create driftwood-agent-trigger \
