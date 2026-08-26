@@ -1,0 +1,7 @@
+fastapi
+uvicorn[standard]
+google-cloud-pubsub
+google-cloud-firestore
+google-adk
+PyGithub
+python-dotenv
