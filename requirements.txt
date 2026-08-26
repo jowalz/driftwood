@@ -3,5 +3,8 @@ uvicorn[standard]
 google-cloud-pubsub
 google-cloud-firestore
 google-adk
+google-genai
+pydantic
 PyGithub
+requests
 python-dotenv
