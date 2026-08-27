@@ -97,6 +97,26 @@ def _prompt_for(symbol: Symbol, doc_section: DocSection, diff_hunk: str) -> str:
     )
 
 
+def _log_token_usage(symbol_name: str, usage, doc_sections_in_context: int) -> None:
+    """A single JSON line on stdout -- Cloud Logging parses one-line JSON on
+    stdout into structured jsonPayload automatically, no text parsing needed
+    on the reading end. `severity`/`message` are the reserved keys it looks
+    for; everything else becomes a queryable field."""
+    print(
+        json.dumps(
+            {
+                "severity": "INFO",
+                "message": "token_usage",
+                "symbol": symbol_name,
+                "prompt_token_count": getattr(usage, "prompt_token_count", None),
+                "candidates_token_count": getattr(usage, "candidates_token_count", None),
+                "total_token_count": getattr(usage, "total_token_count", None),
+                "doc_sections_in_context": doc_sections_in_context,
+            }
+        )
+    )
+
+
 def assess_drift(symbol: Symbol, doc_section: DocSection, diff_hunk: str) -> DriftAssessment:
     """Classifies exactly one drift finding. No tools, no side effects."""
     session_id = content_hash(symbol.name, doc_section.doc_path, doc_section.heading)
@@ -105,9 +125,16 @@ def assess_drift(symbol: Symbol, doc_section: DocSection, diff_hunk: str) -> Dri
     message = types.Content(role="user", parts=[types.Part(text=_prompt_for(symbol, doc_section, diff_hunk))])
 
     raw = None
+    usage = None
     for event in _runner.run(user_id=_USER_ID, session_id=session_id, new_message=message):
         if event.is_final_response() and event.content:
             raw = event.content.parts[0].text
+            usage = event.usage_metadata
+
+    # Always 1 for now: each call carries exactly one doc_section (see
+    # _prompt_for). Logged as a real field, not hardcoded in the message,
+    # so it stays correct if a call ever batches more than one section.
+    _log_token_usage(symbol.name, usage, doc_sections_in_context=1)
 
     if raw is None:
         raise RuntimeError(f"classifier returned no response for {symbol.name}")
