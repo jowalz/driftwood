@@ -63,6 +63,25 @@ fi
 
 RUNTIME_SA="$(gcloud projects describe "$GCP_PROJECT_ID" --format='value(projectNumber)')-compute@developer.gserviceaccount.com"
 
+# gcloud builds submit --tag has no way to point at a Dockerfile outside the
+# source root (there is no -f/--dockerfile flag, that's a plain docker CLI
+# flag) -- both Dockerfiles expect a repo-root build context, so build via a
+# small generated Cloud Build config instead.
+build_image() {
+  local dockerfile="$1" tag="$2"
+  local cfg
+  cfg="$(mktemp)"
+  cat > "$cfg" <<EOF
+steps:
+  - name: 'gcr.io/cloud-builders/docker'
+    args: ['build', '-f', '${dockerfile}', '-t', '${tag}', '.']
+images:
+  - '${tag}'
+EOF
+  gcloud builds submit . --config="$cfg"
+  rm -f "$cfg"
+}
+
 for secret in driftwood-github-token driftwood-github-webhook-secret driftwood-slack-webhook-url; do
   gcloud secrets describe "$secret" --quiet >/dev/null 2>&1 || continue
   gcloud secrets add-iam-policy-binding "$secret" \
@@ -82,7 +101,7 @@ for role in roles/datastore.user roles/pubsub.publisher roles/run.developer; do
 done
 
 # --- Receiver: Cloud Run service ---
-gcloud builds submit --tag "gcr.io/${GCP_PROJECT_ID}/driftwood-receiver" -f receiver/Dockerfile .
+build_image receiver/Dockerfile "gcr.io/${GCP_PROJECT_ID}/driftwood-receiver"
 
 gcloud run deploy driftwood-receiver \
   --image "gcr.io/${GCP_PROJECT_ID}/driftwood-receiver" \
@@ -93,7 +112,7 @@ gcloud run deploy driftwood-receiver \
   --allow-unauthenticated
 
 # --- Agent: Cloud Run job ---
-gcloud builds submit --tag "gcr.io/${GCP_PROJECT_ID}/driftwood-agent" -f agent/Dockerfile .
+build_image agent/Dockerfile "gcr.io/${GCP_PROJECT_ID}/driftwood-agent"
 
 AGENT_SECRETS="GITHUB_TOKEN=driftwood-github-token:latest"
 if gcloud secrets describe driftwood-slack-webhook-url --quiet >/dev/null 2>&1; then
