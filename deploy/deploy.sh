@@ -90,9 +90,9 @@ for secret in driftwood-github-token driftwood-github-webhook-secret driftwood-s
     --quiet >/dev/null
 done
 
-# Firestore (state.py) and Pub/Sub publish (receiver) for the runtime service
-# account; run.developer so the workflow can call jobs.run on its behalf.
-for role in roles/datastore.user roles/pubsub.publisher roles/run.developer; do
+# Firestore (state.py), Pub/Sub publish (receiver), Vertex AI (the ADK
+# classifier), and run.developer so the workflow can call jobs.run.
+for role in roles/datastore.user roles/pubsub.publisher roles/aiplatform.user roles/run.developer; do
   gcloud projects add-iam-policy-binding "$GCP_PROJECT_ID" \
     --member="serviceAccount:${RUNTIME_SA}" \
     --role="$role" \
