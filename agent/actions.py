@@ -9,7 +9,7 @@ duplicate" run internally through state.py.
 import os
 
 import requests
-from github import Github
+from github import Github, GithubException
 
 import state
 
@@ -42,9 +42,19 @@ def open_fix_pr(
         branch = existing["branch"]
         url = existing["url"]
     else:
-        base_ref = repo.get_git_ref(f"heads/{base}")
-        repo.create_git_ref(ref=f"refs/heads/{branch}", sha=base_ref.object.sha)
         url = None
+        base_ref = repo.get_git_ref(f"heads/{base}")
+        try:
+            repo.create_git_ref(ref=f"refs/heads/{branch}", sha=base_ref.object.sha)
+        except GithubException as exc:
+            if exc.status != 422:
+                raise
+            # Branch survived from a run state.py no longer remembers (e.g.
+            # its Firestore record was lost) -- adopt it and its PR, if one
+            # exists, instead of crashing on the collision.
+            for pr in repo.get_pulls(state="open", head=f"{repo.owner.login}:{branch}", base=base):
+                url = pr.html_url
+                break
 
     for path, content in files.items():
         try:
